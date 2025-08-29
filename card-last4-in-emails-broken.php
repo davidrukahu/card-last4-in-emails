@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Card Last4 in Emails
- * Plugin URI: https://github.com/davidrukahu/card-last4-in-emails
+ * Plugin URI: https://github.com/your-username/card-last4-in-emails
  * Description: Adds the last four digits of payment cards to WooCommerce email notifications for Order Details and Customer Notes. Only displays when a card was actually used for payment.
  * Version: 1.0.0
  * Author: davidrukahu
@@ -121,48 +121,6 @@ class Card_Last4_In_Emails {
 			false,
 			dirname( plugin_basename( CL4E_PLUGIN_FILE ) ) . '/languages'
 		);
-	}
-
-	/**
-	 * Add admin menu under WooCommerce.
-	 *
-	 * @since 1.0.0
-	 */
-	public function add_admin_menu() {
-		add_submenu_page(
-			'woocommerce',
-			__( 'Card Last4 Settings', 'card-last4-in-emails' ),
-			__( 'Card Last4', 'card-last4-in-emails' ),
-			'manage_woocommerce',
-			'card-last4-settings',
-			array( $this, 'admin_page' )
-		);
-	}
-
-	/**
-	 * Render admin settings page.
-	 *
-	 * @since 1.0.0
-	 */
-	public function admin_page() {
-		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Card Last4 in Emails Settings', 'card-last4-in-emails' ); ?></h1>
-			<p><?php esc_html_e( 'This plugin automatically adds payment card information to WooCommerce email notifications when a card was used for payment.', 'card-last4-in-emails' ); ?></p>
-			
-			<div class="card" style="max-width: 100%; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-				<h2><?php esc_html_e( 'Current Status', 'card-last4-in-emails' ); ?></h2>
-				<p><?php esc_html_e( '✅ Card information is automatically added to:', 'card-last4-in-emails' ); ?></p>
-				<ul style="list-style-type: disc; margin-left: 20px;">
-					<li><?php esc_html_e( 'Order Details emails', 'card-last4-in-emails' ); ?></li>
-					<li><?php esc_html_e( 'Customer Details emails', 'card-last4-in-emails' ); ?></li>
-					<li><?php esc_html_e( 'Both HTML and plain text email formats', 'card-last4-in-emails' ); ?></li>
-				</ul>
-				
-				<p><strong><?php esc_html_e( 'Note:', 'card-last4-in-emails' ); ?></strong> <?php esc_html_e( 'Card details only appear when a payment card was actually used for the order. The plugin supports various payment gateways including Stripe, WooCommerce Payments, and others.', 'card-last4-in-emails' ); ?></p>
-			</div>
-		</div>
-		<?php
 	}
 
 	/**
