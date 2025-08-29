@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Card Last4 in Emails
- * Plugin URI: https://github.com/davidrukahu/card-last4-in-emails
+ * Plugin URI: https://github.com/your-username/card-last4-in-emails
  * Description: Adds the last four digits of payment cards to WooCommerce email notifications for Order Details and Customer Notes. Only displays when a card was actually used for payment.
  * Version: 1.0.0
  * Author: davidrukahu
@@ -375,60 +375,6 @@ class Card_Last4_In_Emails {
 	public static function deactivate() {
 		// Flush rewrite rules.
 		flush_rewrite_rules();
-	}
-
-	/**
-	 * Add admin menu under WooCommerce.
-	 *
-	 * @since 1.0.0
-	 */
-	public function add_admin_menu() {
-		// Add under WooCommerce menu when available.
-		if ( class_exists( 'WooCommerce' ) ) {
-			add_submenu_page(
-				'woocommerce',
-				__( 'Card Last4 in Emails', 'card-last4-in-emails' ),
-				__( 'Card Last4', 'card-last4-in-emails' ),
-				'manage_woocommerce',
-				'card-last4-settings',
-				array( $this, 'render_settings_page' )
-			);
-		}
-	}
-
-	/**
-	 * Render plugin settings page.
-	 *
-	 * @since 1.0.0
-	 */
-	public function render_settings_page() {
-		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Card Last4 in Emails', 'card-last4-in-emails' ); ?></h1>
-			<p><?php esc_html_e( 'This extension adds payment card details (brand + last4 when available) to WooCommerce emails when a card was used.', 'card-last4-in-emails' ); ?></p>
-			<div class="card" style="max-width: 100%; padding: 16px; border: 1px solid #ccd0d4; background: #fff;">
-				<h2><?php esc_html_e( 'Status', 'card-last4-in-emails' ); ?></h2>
-				<ul style="margin-left: 20px; list-style: disc;">
-					<li><?php esc_html_e( 'Hooks into WooCommerce email order and customer details (HTML + plain).', 'card-last4-in-emails' ); ?></li>
-					<li><?php esc_html_e( 'Only outputs when a card payment and last4 are detected.', 'card-last4-in-emails' ); ?></li>
-				</ul>
-			</div>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Add Settings link on the Plugins page.
-	 *
-	 * @since 1.0.0
-	 * @param array $links Existing links.
-	 * @return array
-	 */
-	public function add_plugin_action_links( $links ) {
-		$settings_url = admin_url( 'admin.php?page=card-last4-settings' );
-		$settings_link = '<a href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'card-last4-in-emails' ) . '</a>';
-		array_unshift( $links, $settings_link );
-		return $links;
 	}
 }
 
