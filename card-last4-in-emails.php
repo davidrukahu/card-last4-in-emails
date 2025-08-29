@@ -73,7 +73,10 @@ class Card_Last4_In_Emails {
 		// Check if WooCommerce is active.
 		add_action( 'plugins_loaded', array( $this, 'check_woocommerce' ) );
 
-		// Always register admin UI hooks and plugin action links (not gated by WC).
+		// Register settings early for options.php whitelist and admin UI.
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
+
+		// Ensure admin submenu and plugin action links are available.
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ), 99 );
 		add_filter( 'plugin_action_links_' . plugin_basename( CL4E_PLUGIN_FILE ), array( $this, 'add_plugin_action_links' ) );
 	}
