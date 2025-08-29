@@ -233,8 +233,27 @@ class Card_Last4_In_Emails {
 			return false;
 		}
 
-		// Get card information using WooCommerce's built-in method.
+		// First, try WooCommerce's built-in method.
 		$card_info = $order->get_payment_card_info();
+
+		// If no card info from built-in method, check common meta fields.
+		if ( empty( $card_info ) || ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
+			$card_info = $this->get_card_info_from_meta( $order );
+		}
+
+		// Debug logging to help troubleshoot.
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			$order_id = $order->get_id();
+			$debug_info = array(
+				'order_id' => $order_id,
+				'payment_method' => $payment_method,
+				'payment_method_title' => $order->get_payment_method_title(),
+				'built_in_card_info' => $order->get_payment_card_info(),
+				'meta_card_info' => $this->get_card_info_from_meta( $order ),
+				'final_card_info' => $card_info,
+			);
+			error_log( 'CL4E Debug - Order ' . $order_id . ': ' . print_r( $debug_info, true ) );
+		}
 
 		// Only return if we have last4 digits.
 		if ( ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
