@@ -138,6 +138,11 @@ class Card_Last4_In_Emails {
 			return;
 		}
 
+		// Respect settings: only output for enabled email IDs.
+		if ( ! $this->is_email_enabled( $email ) ) {
+			return;
+		}
+
 		$card_info = $this->get_order_card_info( $order );
 		if ( empty( $card_info ) ) {
 			return;
@@ -180,6 +185,11 @@ class Card_Last4_In_Emails {
 	 */
 	public function add_card_info_to_plain_order_details( $order, $sent_to_admin, $plain_text, $email ) {
 		if ( ! $plain_text ) {
+			return;
+		}
+
+		// Respect settings: only output for enabled email IDs.
+		if ( ! $this->is_email_enabled( $email ) ) {
 			return;
 		}
 
@@ -402,17 +412,42 @@ class Card_Last4_In_Emails {
 	 * @since 1.0.0
 	 */
 	public function render_settings_page() {
+		$enabled = $this->get_enabled_emails_option();
+		$email_labels = array(
+			'failed_order' => __( 'Failed order (admin)', 'card-last4-in-emails' ),
+			'customer_on_hold_order' => __( 'Order on-hold', 'card-last4-in-emails' ),
+			'customer_processing_order' => __( 'Processing order', 'card-last4-in-emails' ),
+			'customer_completed_order' => __( 'Completed order', 'card-last4-in-emails' ),
+			'customer_refunded_order' => __( 'Refunded order', 'card-last4-in-emails' ),
+			'customer_note' => __( 'Customer note', 'card-last4-in-emails' ),
+		);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Card Last4 in Emails', 'card-last4-in-emails' ); ?></h1>
-			<p><?php esc_html_e( 'This extension adds payment card details (brand + last4 when available) to WooCommerce emails when a card was used.', 'card-last4-in-emails' ); ?></p>
-			<div class="card" style="max-width: 100%; padding: 16px; border: 1px solid #ccd0d4; background: #fff;">
-				<h2><?php esc_html_e( 'Status', 'card-last4-in-emails' ); ?></h2>
-				<ul style="margin-left: 20px; list-style: disc;">
-					<li><?php esc_html_e( 'Hooks into WooCommerce email order and customer details (HTML + plain).', 'card-last4-in-emails' ); ?></li>
-					<li><?php esc_html_e( 'Only outputs when a card payment and last4 are detected.', 'card-last4-in-emails' ); ?></li>
-				</ul>
-			</div>
+			<p><?php esc_html_e( 'Select which WooCommerce emails should include card details when available.', 'card-last4-in-emails' ); ?></p>
+
+			<form method="post" action="options.php">
+				<?php settings_fields( 'cl4e_settings_group' ); ?>
+				<table class="form-table" role="presentation">
+					<tbody>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Enabled emails', 'card-last4-in-emails' ); ?></th>
+							<td>
+								<fieldset>
+									<?php foreach ( $email_labels as $id => $label ) : ?>
+										<label>
+											<input name="cl4e_enabled_emails[<?php echo esc_attr( $id ); ?>]" type="checkbox" value="1" <?php checked( ! empty( $enabled[ $id ] ) ); ?> />
+											<?php echo esc_html( $label ); ?>
+										</label><br />
+									<?php endforeach; ?>
+								</fieldset>
+								<p class="description"><?php esc_html_e( 'These control which email notifications will include the card brand and last 4 digits when a card payment is detected.', 'card-last4-in-emails' ); ?></p>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<?php submit_button(); ?>
+			</form>
 		</div>
 		<?php
 	}
@@ -437,7 +472,78 @@ class Card_Last4_In_Emails {
 	 * @since 1.0.0
 	 */
 	public function register_settings() {
-		// Placeholder for future settings via Settings API.
+		register_setting(
+			'cl4e_settings_group',
+			'cl4e_enabled_emails',
+			array(
+				'type' => 'array',
+				'sanitize_callback' => array( $this, 'sanitize_enabled_emails' ),
+				'default' => $this->get_default_enabled_emails(),
+			)
+		);
+	}
+
+	/**
+	 * Default enabled email types.
+	 *
+	 * @since 1.0.0
+	 * @return array
+	 */
+	private function get_default_enabled_emails() {
+		return array(
+			'failed_order' => true,
+			'customer_on_hold_order' => true,
+			'customer_processing_order' => true,
+			'customer_completed_order' => true,
+			'customer_refunded_order' => true,
+			'customer_note' => true,
+		);
+	}
+
+	/**
+	 * Sanitize checkbox inputs.
+	 *
+	 * @since 1.0.0
+	 * @param array $input Raw input.
+	 * @return array
+	 */
+	public function sanitize_enabled_emails( $input ) {
+		$defaults = $this->get_default_enabled_emails();
+		$sanitized = array();
+		foreach ( $defaults as $key => $default ) {
+			$sanitized[ $key ] = isset( $input[ $key ] ) ? true : false;
+		}
+		return $sanitized;
+	}
+
+	/**
+	 * Get enabled email types option.
+	 *
+	 * @since 1.0.0
+	 * @return array
+	 */
+	private function get_enabled_emails_option() {
+		$option = get_option( 'cl4e_enabled_emails', $this->get_default_enabled_emails() );
+		if ( ! is_array( $option ) ) {
+			$option = $this->get_default_enabled_emails();
+		}
+		return wp_parse_args( $option, $this->get_default_enabled_emails() );
+	}
+
+	/**
+	 * Check if output is enabled for the current email.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Email $email Email instance.
+	 * @return bool
+	 */
+	private function is_email_enabled( $email ) {
+		$enabled = $this->get_enabled_emails_option();
+		$email_id = ( is_object( $email ) && isset( $email->id ) ) ? $email->id : '';
+		if ( empty( $email_id ) ) {
+			return true; // If we cannot detect, do not block.
+		}
+		return isset( $enabled[ $email_id ] ) ? (bool) $enabled[ $email_id ] : true;
 	}
 }
 
