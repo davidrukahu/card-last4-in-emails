@@ -95,6 +95,9 @@ class Card_Last4_In_Emails {
 	 * @since 1.0.0
 	 */
 	private function init() {
+		// Add admin menu and settings.
+		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+
 		// Add hooks for email content.
 		add_action( 'woocommerce_email_order_details', array( $this, 'add_card_info_to_order_details' ), 15, 4 );
 		add_action( 'woocommerce_email_customer_details', array( $this, 'add_card_info_to_customer_details' ), 25, 3 );
@@ -118,6 +121,48 @@ class Card_Last4_In_Emails {
 			false,
 			dirname( plugin_basename( CL4E_PLUGIN_FILE ) ) . '/languages'
 		);
+	}
+
+	/**
+	 * Add admin menu under WooCommerce.
+	 *
+	 * @since 1.0.0
+	 */
+	public function add_admin_menu() {
+		add_submenu_page(
+			'woocommerce',
+			__( 'Card Last4 Settings', 'card-last4-in-emails' ),
+			__( 'Card Last4', 'card-last4-in-emails' ),
+			'manage_woocommerce',
+			'card-last4-settings',
+			array( $this, 'admin_page' )
+		);
+	}
+
+	/**
+	 * Render admin settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function admin_page() {
+		?>
+		<div class="wrap">
+			<h1><?php esc_html_e( 'Card Last4 in Emails Settings', 'card-last4-in-emails' ); ?></h1>
+			<p><?php esc_html_e( 'This plugin automatically adds payment card information to WooCommerce email notifications when a card was used for payment.', 'card-last4-in-emails' ); ?></p>
+			
+			<div class="card" style="max-width: 100%; padding: 20px; margin: 20px 0; border: 1px solid #ccd0d4; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+				<h2><?php esc_html_e( 'Current Status', 'card-last4-in-emails' ); ?></h2>
+				<p><?php esc_html_e( '✅ Card information is automatically added to:', 'card-last4-in-emails' ); ?></p>
+				<ul style="list-style-type: disc; margin-left: 20px;">
+					<li><?php esc_html_e( 'Order Details emails', 'card-last4-in-emails' ); ?></li>
+					<li><?php esc_html_e( 'Customer Details emails', 'card-last4-in-emails' ); ?></li>
+					<li><?php esc_html_e( 'Both HTML and plain text email formats', 'card-last4-in-emails' ); ?></li>
+				</ul>
+				
+				<p><strong><?php esc_html_e( 'Note:', 'card-last4-in-emails' ); ?></strong> <?php esc_html_e( 'Card details only appear when a payment card was actually used for the order. The plugin supports various payment gateways including Stripe, WooCommerce Payments, and others.', 'card-last4-in-emails' ); ?></p>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -233,28 +278,8 @@ class Card_Last4_In_Emails {
 			return false;
 		}
 
-		// First, try WooCommerce's built-in method.
+		// Get card information using WooCommerce's built-in method.
 		$card_info = $order->get_payment_card_info();
-
-		// If no card info from built-in method, try to get it from the same source
-		// that the order received page uses.
-		if ( empty( $card_info ) || ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
-			$card_info = $this->get_card_info_from_order_received_page( $order );
-		}
-
-		// Debug logging to help troubleshoot.
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$order_id = $order->get_id();
-			$debug_info = array(
-				'order_id' => $order_id,
-				'payment_method' => $payment_method,
-				'payment_method_title' => $order->get_payment_method_title(),
-				'built_in_card_info' => $order->get_payment_card_info(),
-				'order_received_card_info' => $this->get_card_info_from_order_received_page( $order ),
-				'final_card_info' => $card_info,
-			);
-			error_log( 'CL4E Debug - Order ' . $order_id . ': ' . print_r( $debug_info, true ) );
-		}
 
 		// Only return if we have last4 digits.
 		if ( ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
@@ -262,199 +287,6 @@ class Card_Last4_In_Emails {
 		}
 
 		return $card_info;
-	}
-
-	/**
-	 * Get card information using the same method as the order received page.
-	 *
-	 * @since 1.0.0
-	 * @param WC_Order $order Order instance.
-	 * @return array Card information array.
-	 */
-	private function get_card_info_from_order_received_page( $order ) {
-		$card_info = array();
-
-		// Get all order meta to see what's available
-		$all_meta = $order->get_meta_data();
-		
-		// Look for Stripe-specific meta fields
-		$stripe_meta_fields = array(
-			'_stripe_payment_intent_id',
-			'_stripe_source_id',
-			'_stripe_charge_id',
-			'_stripe_payment_method_id',
-			'_stripe_customer_id',
-		);
-
-		// Check if this is a Stripe order
-		$is_stripe = false;
-		foreach ( $stripe_meta_fields as $meta_key ) {
-			if ( $order->get_meta( $meta_key ) ) {
-				$is_stripe = true;
-				break;
-			}
-		}
-
-		if ( $is_stripe ) {
-			// For Stripe, try to get card info from various sources
-			$card_info = $this->get_stripe_card_info( $order );
-		} else {
-			// For other payment methods, try common patterns
-			$card_info = $this->get_generic_card_info( $order );
-		}
-
-		return $card_info;
-	}
-
-	/**
-	 * Get Stripe-specific card information.
-	 *
-	 * @since 1.0.0
-	 * @param WC_Order $order Order instance.
-	 * @return array Card information array.
-	 */
-	private function get_stripe_card_info( $order ) {
-		$card_info = array();
-
-		// Check for Stripe payment method details
-		$payment_method_id = $order->get_meta( '_stripe_payment_method_id' );
-		if ( $payment_method_id ) {
-			// Try to get card info from Stripe API if possible
-			$card_info = $this->get_stripe_payment_method_info( $payment_method_id );
-		}
-
-		// If API call didn't work, check meta fields
-		if ( empty( $card_info['last4'] ) ) {
-			// Look for card info in meta fields
-			$meta_fields = array(
-				'_stripe_card_last4',
-				'_stripe_card_brand',
-				'_stripe_card_type',
-				'_card_last4',
-				'_card_brand',
-				'_card_type',
-			);
-
-			foreach ( $meta_fields as $meta_key ) {
-				$meta_value = $order->get_meta( $meta_key );
-				if ( ! empty( $meta_value ) ) {
-					if ( strpos( $meta_key, 'last4' ) !== false ) {
-						$card_info['last4'] = $meta_value;
-					} elseif ( strpos( $meta_key, 'brand' ) !== false ) {
-						$card_info['brand'] = $meta_value;
-					} elseif ( strpos( $meta_key, 'type' ) !== false ) {
-						$card_info['type'] = $meta_value;
-					}
-				}
-			}
-		}
-
-		// If we still don't have last4, try to extract from payment method title
-		if ( empty( $card_info['last4'] ) ) {
-			$payment_title = $order->get_payment_method_title();
-			if ( ! empty( $payment_title ) ) {
-				$last4 = $this->extract_last4_from_text( $payment_title );
-				if ( $last4 ) {
-					$card_info['last4'] = $last4;
-				}
-			}
-		}
-
-		return $card_info;
-	}
-
-	/**
-	 * Get generic card information for non-Stripe payment methods.
-	 *
-	 * @since 1.0.0
-	 * @param WC_Order $order Order instance.
-	 * @return array Card information array.
-	 */
-	private function get_generic_card_info( $order ) {
-		$card_info = array();
-
-		// Check common meta field patterns
-		$meta_fields = array(
-			'_card_last4',
-			'_card_brand',
-			'_card_type',
-			'_payment_method_id',
-			'_transaction_id',
-		);
-
-		foreach ( $meta_fields as $meta_key ) {
-			$meta_value = $order->get_meta( $meta_key );
-			if ( ! empty( $meta_value ) ) {
-				if ( strpos( $meta_key, 'last4' ) !== false ) {
-					$card_info['last4'] = $meta_value;
-				} elseif ( strpos( $meta_key, 'brand' ) !== false ) {
-					$card_info['brand'] = $meta_value;
-				} elseif ( strpos( $meta_key, 'type' ) !== false ) {
-					$card_info['type'] = $meta_value;
-				}
-			}
-		}
-
-		// Try to extract from payment method title
-		if ( empty( $card_info['last4'] ) ) {
-			$payment_title = $order->get_payment_method_title();
-			if ( ! empty( $payment_title ) ) {
-				$last4 = $this->extract_last4_from_text( $payment_title );
-				if ( $last4 ) {
-					$card_info['last4'] = $last4;
-				}
-			}
-		}
-
-		return $card_info;
-	}
-
-	/**
-	 * Try to get Stripe payment method info from API.
-	 *
-	 * @since 1.0.0
-	 * @param string $payment_method_id Stripe payment method ID.
-	 * @return array Card information array.
-	 */
-	private function get_stripe_payment_method_info( $payment_method_id ) {
-		$card_info = array();
-
-		// Check if Stripe PHP library is available
-		if ( class_exists( '\Stripe\Stripe' ) ) {
-			try {
-				// This would require Stripe API key configuration
-				// For now, we'll return empty and rely on meta fields
-			} catch ( Exception $e ) {
-				// Log error if needed
-			}
-		}
-
-		return $card_info;
-	}
-
-	/**
-	 * Extract last4 digits from text.
-	 *
-	 * @since 1.0.0
-	 * @param string $text Text to search.
-	 * @return string|false Last 4 digits or false if not found.
-	 */
-	private function extract_last4_from_text( $text ) {
-		// Look for patterns like "ending in 1234" or "****1234".
-		if ( preg_match( '/ending in (\d{4})/i', $text, $matches ) ) {
-			return $matches[1];
-		}
-
-		if ( preg_match( '/\*{4}(\d{4})/', $text, $matches ) ) {
-			return $matches[1];
-		}
-
-		// Look for any 4-digit number that might be last4.
-		if ( preg_match( '/\b(\d{4})\b/', $text, $matches ) ) {
-			return $matches[1];
-		}
-
-		return false;
 	}
 
 	/**
