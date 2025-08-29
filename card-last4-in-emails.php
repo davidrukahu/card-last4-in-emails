@@ -236,9 +236,10 @@ class Card_Last4_In_Emails {
 		// First, try WooCommerce's built-in method.
 		$card_info = $order->get_payment_card_info();
 
-		// If no card info from built-in method, check common meta fields.
+		// If no card info from built-in method, try to get it from the same source
+		// that the order received page uses.
 		if ( empty( $card_info ) || ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
-			$card_info = $this->get_card_info_from_meta( $order );
+			$card_info = $this->get_card_info_from_order_received_page( $order );
 		}
 
 		// Debug logging to help troubleshoot.
@@ -249,7 +250,7 @@ class Card_Last4_In_Emails {
 				'payment_method' => $payment_method,
 				'payment_method_title' => $order->get_payment_method_title(),
 				'built_in_card_info' => $order->get_payment_card_info(),
-				'meta_card_info' => $this->get_card_info_from_meta( $order ),
+				'order_received_card_info' => $this->get_card_info_from_order_received_page( $order ),
 				'final_card_info' => $card_info,
 			);
 			error_log( 'CL4E Debug - Order ' . $order_id . ': ' . print_r( $debug_info, true ) );
@@ -261,6 +262,199 @@ class Card_Last4_In_Emails {
 		}
 
 		return $card_info;
+	}
+
+	/**
+	 * Get card information using the same method as the order received page.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Order $order Order instance.
+	 * @return array Card information array.
+	 */
+	private function get_card_info_from_order_received_page( $order ) {
+		$card_info = array();
+
+		// Get all order meta to see what's available
+		$all_meta = $order->get_meta_data();
+		
+		// Look for Stripe-specific meta fields
+		$stripe_meta_fields = array(
+			'_stripe_payment_intent_id',
+			'_stripe_source_id',
+			'_stripe_charge_id',
+			'_stripe_payment_method_id',
+			'_stripe_customer_id',
+		);
+
+		// Check if this is a Stripe order
+		$is_stripe = false;
+		foreach ( $stripe_meta_fields as $meta_key ) {
+			if ( $order->get_meta( $meta_key ) ) {
+				$is_stripe = true;
+				break;
+			}
+		}
+
+		if ( $is_stripe ) {
+			// For Stripe, try to get card info from various sources
+			$card_info = $this->get_stripe_card_info( $order );
+		} else {
+			// For other payment methods, try common patterns
+			$card_info = $this->get_generic_card_info( $order );
+		}
+
+		return $card_info;
+	}
+
+	/**
+	 * Get Stripe-specific card information.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Order $order Order instance.
+	 * @return array Card information array.
+	 */
+	private function get_stripe_card_info( $order ) {
+		$card_info = array();
+
+		// Check for Stripe payment method details
+		$payment_method_id = $order->get_meta( '_stripe_payment_method_id' );
+		if ( $payment_method_id ) {
+			// Try to get card info from Stripe API if possible
+			$card_info = $this->get_stripe_payment_method_info( $payment_method_id );
+		}
+
+		// If API call didn't work, check meta fields
+		if ( empty( $card_info['last4'] ) ) {
+			// Look for card info in meta fields
+			$meta_fields = array(
+				'_stripe_card_last4',
+				'_stripe_card_brand',
+				'_stripe_card_type',
+				'_card_last4',
+				'_card_brand',
+				'_card_type',
+			);
+
+			foreach ( $meta_fields as $meta_key ) {
+				$meta_value = $order->get_meta( $meta_key );
+				if ( ! empty( $meta_value ) ) {
+					if ( strpos( $meta_key, 'last4' ) !== false ) {
+						$card_info['last4'] = $meta_value;
+					} elseif ( strpos( $meta_key, 'brand' ) !== false ) {
+						$card_info['brand'] = $meta_value;
+					} elseif ( strpos( $meta_key, 'type' ) !== false ) {
+						$card_info['type'] = $meta_value;
+					}
+				}
+			}
+		}
+
+		// If we still don't have last4, try to extract from payment method title
+		if ( empty( $card_info['last4'] ) ) {
+			$payment_title = $order->get_payment_method_title();
+			if ( ! empty( $payment_title ) ) {
+				$last4 = $this->extract_last4_from_text( $payment_title );
+				if ( $last4 ) {
+					$card_info['last4'] = $last4;
+				}
+			}
+		}
+
+		return $card_info;
+	}
+
+	/**
+	 * Get generic card information for non-Stripe payment methods.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Order $order Order instance.
+	 * @return array Card information array.
+	 */
+	private function get_generic_card_info( $order ) {
+		$card_info = array();
+
+		// Check common meta field patterns
+		$meta_fields = array(
+			'_card_last4',
+			'_card_brand',
+			'_card_type',
+			'_payment_method_id',
+			'_transaction_id',
+		);
+
+		foreach ( $meta_fields as $meta_key ) {
+			$meta_value = $order->get_meta( $meta_key );
+			if ( ! empty( $meta_value ) ) {
+				if ( strpos( $meta_key, 'last4' ) !== false ) {
+					$card_info['last4'] = $meta_value;
+				} elseif ( strpos( $meta_key, 'brand' ) !== false ) {
+					$card_info['brand'] = $meta_value;
+				} elseif ( strpos( $meta_key, 'type' ) !== false ) {
+					$card_info['type'] = $meta_value;
+				}
+			}
+		}
+
+		// Try to extract from payment method title
+		if ( empty( $card_info['last4'] ) ) {
+			$payment_title = $order->get_payment_method_title();
+			if ( ! empty( $payment_title ) ) {
+				$last4 = $this->extract_last4_from_text( $payment_title );
+				if ( $last4 ) {
+					$card_info['last4'] = $last4;
+				}
+			}
+		}
+
+		return $card_info;
+	}
+
+	/**
+	 * Try to get Stripe payment method info from API.
+	 *
+	 * @since 1.0.0
+	 * @param string $payment_method_id Stripe payment method ID.
+	 * @return array Card information array.
+	 */
+	private function get_stripe_payment_method_info( $payment_method_id ) {
+		$card_info = array();
+
+		// Check if Stripe PHP library is available
+		if ( class_exists( '\Stripe\Stripe' ) ) {
+			try {
+				// This would require Stripe API key configuration
+				// For now, we'll return empty and rely on meta fields
+			} catch ( Exception $e ) {
+				// Log error if needed
+			}
+		}
+
+		return $card_info;
+	}
+
+	/**
+	 * Extract last4 digits from text.
+	 *
+	 * @since 1.0.0
+	 * @param string $text Text to search.
+	 * @return string|false Last 4 digits or false if not found.
+	 */
+	private function extract_last4_from_text( $text ) {
+		// Look for patterns like "ending in 1234" or "****1234".
+		if ( preg_match( '/ending in (\d{4})/i', $text, $matches ) ) {
+			return $matches[1];
+		}
+
+		if ( preg_match( '/\*{4}(\d{4})/', $text, $matches ) ) {
+			return $matches[1];
+		}
+
+		// Look for any 4-digit number that might be last4.
+		if ( preg_match( '/\b(\d{4})\b/', $text, $matches ) ) {
+			return $matches[1];
+		}
+
+		return false;
 	}
 
 	/**
