@@ -72,6 +72,10 @@ class Card_Last4_In_Emails {
 	private function init_hooks() {
 		// Check if WooCommerce is active.
 		add_action( 'plugins_loaded', array( $this, 'check_woocommerce' ) );
+
+		// Always register admin UI hooks and plugin action links (not gated by WC).
+		add_action( 'admin_menu', array( $this, 'add_admin_menu' ), 99 );
+		add_filter( 'plugin_action_links_' . plugin_basename( CL4E_PLUGIN_FILE ), array( $this, 'add_plugin_action_links' ) );
 	}
 
 	/**
@@ -95,10 +99,6 @@ class Card_Last4_In_Emails {
 	 * @since 1.0.0
 	 */
 	private function init() {
-		// Add admin menu and settings links.
-		add_action( 'admin_menu', array( $this, 'add_admin_menu' ), 99 );
-		add_filter( 'plugin_action_links_' . plugin_basename( CL4E_PLUGIN_FILE ), array( $this, 'add_plugin_action_links' ) );
-
 		// Add hooks for email content.
 		add_action( 'woocommerce_email_order_details', array( $this, 'add_card_info_to_order_details' ), 15, 4 );
 		add_action( 'woocommerce_email_customer_details', array( $this, 'add_card_info_to_customer_details' ), 25, 3 );
@@ -429,6 +429,15 @@ class Card_Last4_In_Emails {
 		$settings_link = '<a href="' . esc_url( $settings_url ) . '">' . esc_html__( 'Settings', 'card-last4-in-emails' ) . '</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
+	}
+
+	/**
+	 * Register plugin settings (placeholder for future options).
+	 *
+	 * @since 1.0.0
+	 */
+	public function register_settings() {
+		// Placeholder for future settings via Settings API.
 	}
 }
 
