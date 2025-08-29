@@ -250,15 +250,116 @@ class Card_Last4_In_Emails {
 			return false;
 		}
 
-		// Get card information using WooCommerce's built-in method.
+		// Try WooCommerce's built-in method first.
 		$card_info = $order->get_payment_card_info();
 
+		// Fallback detection across common gateways.
+		if ( empty( $card_info ) || empty( $card_info['last4'] ) ) {
+			$card_info = $this->detect_card_info_fallback( $order );
+		}
+
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			$debug = array(
+				'order_id' => $order->get_id(),
+				'payment_method' => $payment_method,
+				'card_info' => $card_info,
+			);
+			error_log( 'CL4E: ' . print_r( $debug, true ) );
+		}
+
 		// Only return if we have last4 digits.
-		if ( ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
+		if ( empty( $card_info ) || ! isset( $card_info['last4'] ) || empty( $card_info['last4'] ) ) {
 			return false;
 		}
 
 		return $card_info;
+	}
+
+	/**
+	 * Try to extract card last4/brand from multiple sources.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Order $order Order instance.
+	 * @return array|false
+	 */
+	private function detect_card_info_fallback( $order ) {
+		$last4 = '';
+		$brand = '';
+
+		// Common meta keys used by gateways (Stripe, WooPayments, others).
+		$last4_keys = array(
+			'_stripe_card_last4',
+			'_stripe_last4',
+			'_stripe_source_last4',
+			'_wcpay_card_last4',
+			'_card_last4',
+			'_authnet_card_last_four',
+		);
+		$brand_keys = array(
+			'_stripe_card_brand',
+			'_wcpay_card_brand',
+			'_card_brand',
+		);
+
+		foreach ( $last4_keys as $k ) {
+			$v = $order->get_meta( $k );
+			if ( ! empty( $v ) ) {
+				$last4 = substr( preg_replace( '/\D/', '', (string) $v ), -4 );
+				if ( strlen( $last4 ) === 4 ) {
+					break;
+				}
+			}
+		}
+		foreach ( $brand_keys as $k ) {
+			$v = $order->get_meta( $k );
+			if ( ! empty( $v ) ) {
+				$brand = (string) $v;
+				break;
+			}
+		}
+
+		// If still no last4, try to parse payment method title.
+		if ( empty( $last4 ) ) {
+			$title = $order->get_payment_method_title();
+			if ( is_string( $title ) && '' !== $title ) {
+				$maybe = $this->extract_last4_from_text( $title );
+				if ( $maybe ) {
+					$last4 = $maybe;
+				}
+			}
+		}
+
+		if ( empty( $last4 ) ) {
+			return false;
+		}
+
+		return array(
+			'last4' => $last4,
+			'brand' => $brand,
+		);
+	}
+
+	/**
+	 * Extract last 4 digits from free text like "****4242" or "ending in 4242".
+	 *
+	 * @since 1.0.0
+	 * @param string $text Text to parse.
+	 * @return string|false
+	 */
+	private function extract_last4_from_text( $text ) {
+		if ( ! is_string( $text ) ) {
+			return false;
+		}
+		if ( preg_match( '/ending\s+in\s+(\d{4})/i', $text, $m ) ) {
+			return $m[1];
+		}
+		if ( preg_match( '/\*{2,}\s*(\d{4})/', $text, $m ) ) {
+			return $m[1];
+		}
+		if ( preg_match( '/\b(\d{4})\b/', $text, $m ) ) {
+			return $m[1];
+		}
+		return false;
 	}
 
 	/**
